@@ -1,24 +1,63 @@
-console.log('Try npm run lint/fix!');
+import * as grpc from '@grpc/grpc-js';
+import * as health_pb from './pb/health_pb';
+import * as health_grpc_pb from './pb/health_grpc_pb';
 
-const longString =
-  'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer ut aliquet diam.';
+type _StatusMap = {
+  [service: string]: health_pb.HealthCheckResponse.ServingStatus;
+};
 
-const trailing = 'Semicolon';
+/**
+ * represents (initial) status for each service.
+ * empty service `""` represents the status for whole server.
+ */
+export type StatusMap = Readonly<_StatusMap>;
 
-const why = 'am I tabbed?';
+/**
+ * HealthChecker provides gRPC health check implementation via #.server.
+ */
+export class HealthChecker {
+  private statusMap: _StatusMap = {};
+  server: health_grpc_pb.IHealthServer;
 
-export function doSomeStuff(
-  withThis: string,
-  andThat: string,
-  andThose: string[]
-) {
-  //function on one line
-  if (!andThose.length) {
-    return false;
+  /**
+   * initializes a new HealthChecker.
+   * @param statusMap: specifies initial status for each service.
+   */
+  constructor(statusMap: StatusMap) {
+    Object.assign(this.statusMap, statusMap);
+    this.server = {
+      check: this.check.bind(this),
+    };
   }
-  console.log(withThis);
-  console.log(andThat);
-  console.dir(andThose);
-  return;
+
+  /**
+   * Update status for specified service.
+   * @param service target service name
+   * @param status new status
+   */
+  setStatus(
+    service: string,
+    status: health_pb.HealthCheckResponse.ServingStatus
+  ): void {
+    this.statusMap[service] = status;
+  }
+
+  private check(
+    call: grpc.ServerUnaryCall<
+      health_pb.HealthCheckRequest,
+      health_pb.HealthCheckResponse
+    >,
+    callback: grpc.sendUnaryData<health_pb.HealthCheckResponse>
+  ): void {
+    const service = call.request.getService();
+    const status = this.statusMap[service];
+    if (status === null) {
+      callback({code: grpc.status.NOT_FOUND}, null);
+    }
+    const res = new health_pb.HealthCheckResponse();
+    res.setStatus(status);
+    callback(null, res);
+  }
 }
-// TODO: more examples
+
+export const ServingStatus = health_pb.HealthCheckResponse.ServingStatus;

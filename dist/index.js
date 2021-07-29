@@ -1,20 +1,42 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.doSomeStuff = void 0;
-console.log('Try npm run lint/fix!');
-const longString = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer ut aliquet diam.';
-const trailing = 'Semicolon';
-const why = 'am I tabbed?';
-function doSomeStuff(withThis, andThat, andThose) {
-    //function on one line
-    if (!andThose.length) {
-        return false;
+exports.ServingStatus = exports.HealthChecker = void 0;
+const grpc = require("@grpc/grpc-js");
+const health_pb = require("./pb/health_pb");
+/**
+ * HealthChecker provides gRPC health check implementation via #.server.
+ */
+class HealthChecker {
+    /**
+     * initializes a new HealthChecker.
+     * @param statusMap: specifies initial status for each service.
+     */
+    constructor(statusMap) {
+        this.statusMap = {};
+        Object.assign(this.statusMap, statusMap);
+        this.server = {
+            check: this.check.bind(this),
+        };
     }
-    console.log(withThis);
-    console.log(andThat);
-    console.dir(andThose);
-    return;
+    /**
+     * Update status for specified service.
+     * @param service target service name
+     * @param status new status
+     */
+    setStatus(service, status) {
+        this.statusMap[service] = status;
+    }
+    check(call, callback) {
+        const service = call.request.getService();
+        const status = this.statusMap[service];
+        if (status === null) {
+            callback({ code: grpc.status.NOT_FOUND }, null);
+        }
+        const res = new health_pb.HealthCheckResponse();
+        res.setStatus(status);
+        callback(null, res);
+    }
 }
-exports.doSomeStuff = doSomeStuff;
-// TODO: more examples
+exports.HealthChecker = HealthChecker;
+exports.ServingStatus = health_pb.HealthCheckResponse.ServingStatus;
 //# sourceMappingURL=index.js.map
