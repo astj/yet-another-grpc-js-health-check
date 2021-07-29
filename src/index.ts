@@ -51,7 +51,7 @@ export class HealthChecker {
   ): void {
     const service = call.request.getService();
     const status = this.statusMap[service];
-    if (status === null) {
+    if (status === undefined) {
       callback({code: grpc.status.NOT_FOUND}, null);
     }
     const res = new health_pb.HealthCheckResponse();
