@@ -1,5 +1,5 @@
 {
-  "name": "yet-another-grpc-js-health-check",
+  "name": "@astj/grpc-js-health-check",
   "version": "0.0.1",
   "description": "Yet Another health-check implementation for @grpc/grpc-js.",
   "main": "dist/index.js",
