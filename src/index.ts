@@ -7,21 +7,35 @@ type _StatusMap = {
 };
 
 /**
- * represents (initial) status for each service.
+ * Represents (initial) status for each service.
  * empty service `""` represents the status for whole server.
  */
 export type StatusMap = Readonly<_StatusMap>;
 
 /**
- * HealthChecker provides gRPC health check implementation via #.server.
+ * Provides gRPC health checking protocol implementation.
+ *
+ * @remarks
+ * For information about the protocol, see https://github.com/grpc/grpc/blob/master/doc/health-checking.md
+ *
+ * @example
+ * import { HealthChecker, healthService, servingStatus } from '@astj/grpc-js-health-check';
+ * const s = new grpc.Server();
+ * const healthChecker = new HealthChecker({ '': servingStatus.SERVING, 'some.service': servingStatus.NOT_SERVING })
+ * s.addService(HealthService, healthChecker.server);
+ * s.addService(someService, someImpl);
+ * healthChecker.setStatus('some.service', servingStatus.SERVING);
  */
 export class HealthChecker {
   private statusMap: _StatusMap = {};
+  /**
+   * Behaves as health check service implementation.
+   */
   server: health_grpc_pb.IHealthServer;
 
   /**
-   * initializes a new HealthChecker.
-   * @param statusMap: specifies initial status for each service.
+   * Initializes a new HealthChecker.
+   * @param statusMap - specifies initial status for each service.
    */
   constructor(statusMap: StatusMap) {
     Object.assign(this.statusMap, statusMap);
@@ -32,8 +46,8 @@ export class HealthChecker {
 
   /**
    * Update status for specified service.
-   * @param service target service name
-   * @param status new status
+   * @param service - target service name
+   * @param status - new status
    */
   setStatus(
     service: string,
@@ -61,3 +75,4 @@ export class HealthChecker {
 }
 
 export const ServingStatus = health_pb.HealthCheckResponse.ServingStatus;
+export const HealthService = health_grpc_pb.HealthService;
