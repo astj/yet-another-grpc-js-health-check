@@ -1,87 +1,136 @@
+import * as util from 'util';
 import * as grpc from '@grpc/grpc-js';
-import {HealthChecker} from '../src';
+import * as getPort from 'get-port';
 import * as health_pb from '../src/pb/health_pb';
+import * as health_grpc_pb from '../src/pb/health_grpc_pb';
+import {HealthService, HealthChecker, ServingStatus} from '../src';
+
+async function withServer(
+  server: grpc.Server,
+  callback: (address: string) => Promise<void>
+): Promise<void> {
+  const bindServerAsync = util.promisify(server.bindAsync).bind(server);
+  const tryServerShutdown = util.promisify(server.tryShutdown).bind(server);
+
+  const port = await getPort();
+  const address = `0.0.0.0:${port}`;
+
+  await bindServerAsync(address, grpc.ServerCredentials.createInsecure());
+  server.start();
+  await callback(address);
+  return tryServerShutdown();
+}
+
+function NewHealthCheckRequest(service: string): health_pb.HealthCheckRequest {
+  const request = new health_pb.HealthCheckRequest();
+  request.setService(service);
+  return request;
+}
 
 describe('HealthChecker', () => {
-  const healthChecker = new HealthChecker({
-    '': health_pb.HealthCheckResponse.ServingStatus.SERVING,
-    'some/service': health_pb.HealthCheckResponse.ServingStatus.UNKNOWN,
-  });
+  describe('#server', () => {
+    it('returns valid message on requests with valid service names', async () => {
+      const healthChecker = new HealthChecker({
+        '': ServingStatus.SERVING,
+        'some/service': ServingStatus.NOT_SERVING,
+      });
+      const server = new grpc.Server();
+      server.addService(HealthService, healthChecker.server);
 
-  it('responds whole service status', () => {
-    expect(healthChecker._genResponse('')[0]).toEqual(null);
-    expect(healthChecker._genResponse('')[1]?.getStatus()).toEqual(
-      health_pb.HealthCheckResponse.ServingStatus.SERVING
-    );
-  });
+      await withServer(server, async address => {
+        const client = new health_grpc_pb.HealthClient(
+          address,
+          grpc.credentials.createInsecure()
+        );
+        const doCheck = util
+          .promisify<
+            health_pb.HealthCheckRequest,
+            health_pb.HealthCheckResponse
+          >(client.check)
+          .bind(client);
 
-  it("responds individual service's  status", () => {
-    expect(healthChecker._genResponse('some/service')[0]).toEqual(null);
-    expect(healthChecker._genResponse('some/service')[1]?.getStatus()).toEqual(
-      health_pb.HealthCheckResponse.ServingStatus.UNKNOWN
-    );
-  });
+        expect((await doCheck(NewHealthCheckRequest('')))?.getStatus()).toEqual(
+          health_pb.HealthCheckResponse.ServingStatus.SERVING
+        );
 
-  it('returns NOT_FOUND for unknown service name', () => {
-    expect(healthChecker._genResponse('unknown/service')[0]?.code).toEqual(
-      grpc.status.NOT_FOUND
-    );
-    expect(healthChecker._genResponse('unknown/service')[1]).toEqual(null);
-  });
-
-  it('updates status by setStatus', () => {
-    const healthChecker = new HealthChecker({
-      '': health_pb.HealthCheckResponse.ServingStatus.UNKNOWN,
-      'some/service': health_pb.HealthCheckResponse.ServingStatus.NOT_SERVING,
-      'another/service':
-        health_pb.HealthCheckResponse.ServingStatus.NOT_SERVING,
+        expect(
+          (await doCheck(NewHealthCheckRequest('some/service')))?.getStatus()
+        ).toEqual(health_pb.HealthCheckResponse.ServingStatus.NOT_SERVING);
+      });
     });
 
-    expect(healthChecker._genResponse('')[1]?.getStatus()).toEqual(
-      health_pb.HealthCheckResponse.ServingStatus.UNKNOWN
-    );
-    expect(healthChecker._genResponse('some/service')[1]?.getStatus()).toEqual(
-      health_pb.HealthCheckResponse.ServingStatus.NOT_SERVING
-    );
-    expect(
-      healthChecker._genResponse('another/service')[1]?.getStatus()
-    ).toEqual(health_pb.HealthCheckResponse.ServingStatus.NOT_SERVING);
+    it('returns NOT_FOUND error on requests with service names which is not registered', async () => {
+      const healthChecker = new HealthChecker({
+        '': ServingStatus.SERVING,
+        'some/service': ServingStatus.NOT_SERVING,
+      });
 
-    healthChecker.setStatus(
-      'some/service',
-      health_pb.HealthCheckResponse.ServingStatus.SERVING
-    );
+      const server = new grpc.Server();
+      server.addService(HealthService, healthChecker.server);
 
-    // updates status for specified service
-    expect(healthChecker._genResponse('some/service')[1]?.getStatus()).toEqual(
-      health_pb.HealthCheckResponse.ServingStatus.SERVING
-    );
+      await withServer(server, async address => {
+        const client = new health_grpc_pb.HealthClient(
+          address,
+          grpc.credentials.createInsecure()
+        );
+        const doCheck = util
+          .promisify<
+            health_pb.HealthCheckRequest,
+            health_pb.HealthCheckResponse
+          >(client.check)
+          .bind(client);
 
-    // does not affect on other services
-    expect(healthChecker._genResponse('')[1]?.getStatus()).toEqual(
-      health_pb.HealthCheckResponse.ServingStatus.UNKNOWN
-    );
-    expect(
-      healthChecker._genResponse('another/service')[1]?.getStatus()
-    ).toEqual(health_pb.HealthCheckResponse.ServingStatus.NOT_SERVING);
+        try {
+          await doCheck(NewHealthCheckRequest(''));
+        } catch (err) {
+          expect((err as grpc.ServiceError).code).toEqual(
+            grpc.status.NOT_FOUND
+          );
+        }
+      });
+    });
+  });
 
-    healthChecker.setStatus(
-      '',
-      health_pb.HealthCheckResponse.ServingStatus.SERVING
-    );
+  describe('#setStatus', () => {
+    it('updates status for given service', async () => {
+      const healthChecker = new HealthChecker({
+        '': ServingStatus.SERVING,
+        'some/service': ServingStatus.NOT_SERVING,
+      });
+      const server = new grpc.Server();
+      server.addService(HealthService, healthChecker.server);
 
-    // updates status for whole server.
-    expect(healthChecker._genResponse('')[1]?.getStatus()).toEqual(
-      health_pb.HealthCheckResponse.ServingStatus.SERVING
-    );
+      await withServer(server, async address => {
+        const client = new health_grpc_pb.HealthClient(
+          address,
+          grpc.credentials.createInsecure()
+        );
+        const doCheck = util
+          .promisify<
+            health_pb.HealthCheckRequest,
+            health_pb.HealthCheckResponse
+          >(client.check)
+          .bind(client);
 
-    // does not affect on other services
-    expect(healthChecker._genResponse('some/service')[1]?.getStatus()).toEqual(
-      health_pb.HealthCheckResponse.ServingStatus.SERVING
-    );
+        // initial statuses
+        expect((await doCheck(NewHealthCheckRequest('')))?.getStatus()).toEqual(
+          health_pb.HealthCheckResponse.ServingStatus.SERVING
+        );
+        expect(
+          (await doCheck(NewHealthCheckRequest('some/service')))?.getStatus()
+        ).toEqual(health_pb.HealthCheckResponse.ServingStatus.NOT_SERVING);
 
-    expect(
-      healthChecker._genResponse('another/service')[1]?.getStatus()
-    ).toEqual(health_pb.HealthCheckResponse.ServingStatus.NOT_SERVING);
+        // update certain service
+        healthChecker.setStatus('some/service', ServingStatus.UNKNOWN);
+
+        // status for 'some/service' will change, and for '' will be kept same
+        expect((await doCheck(NewHealthCheckRequest('')))?.getStatus()).toEqual(
+          health_pb.HealthCheckResponse.ServingStatus.SERVING
+        );
+        expect(
+          (await doCheck(NewHealthCheckRequest('some/service')))?.getStatus()
+        ).toEqual(health_pb.HealthCheckResponse.ServingStatus.UNKNOWN);
+      });
+    });
   });
 });
