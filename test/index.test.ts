@@ -1,11 +1,11 @@
 import * as grpc from '@grpc/grpc-js';
-import {HealthChecker} from '../src';
+import {HealthChecker, ServingStatus} from '../src';
 import * as health_pb from '../src/pb/health_pb';
 
 describe('HealthChecker', () => {
   const healthChecker = new HealthChecker({
-    '': health_pb.HealthCheckResponse.ServingStatus.SERVING,
-    'some/service': health_pb.HealthCheckResponse.ServingStatus.UNKNOWN,
+    '': ServingStatus.SERVING,
+    'some/service': ServingStatus.UNKNOWN,
   });
 
   it('responds whole service status', () => {
@@ -31,10 +31,9 @@ describe('HealthChecker', () => {
 
   it('updates status by setStatus', () => {
     const healthChecker = new HealthChecker({
-      '': health_pb.HealthCheckResponse.ServingStatus.UNKNOWN,
-      'some/service': health_pb.HealthCheckResponse.ServingStatus.NOT_SERVING,
-      'another/service':
-        health_pb.HealthCheckResponse.ServingStatus.NOT_SERVING,
+      '': ServingStatus.UNKNOWN,
+      'some/service': ServingStatus.NOT_SERVING,
+      'another/service': ServingStatus.NOT_SERVING,
     });
 
     expect(healthChecker._genResponse('')[1]?.getStatus()).toEqual(
@@ -47,10 +46,7 @@ describe('HealthChecker', () => {
       healthChecker._genResponse('another/service')[1]?.getStatus()
     ).toEqual(health_pb.HealthCheckResponse.ServingStatus.NOT_SERVING);
 
-    healthChecker.setStatus(
-      'some/service',
-      health_pb.HealthCheckResponse.ServingStatus.SERVING
-    );
+    healthChecker.setStatus('some/service', ServingStatus.SERVING);
 
     // updates status for specified service
     expect(healthChecker._genResponse('some/service')[1]?.getStatus()).toEqual(
@@ -65,10 +61,7 @@ describe('HealthChecker', () => {
       healthChecker._genResponse('another/service')[1]?.getStatus()
     ).toEqual(health_pb.HealthCheckResponse.ServingStatus.NOT_SERVING);
 
-    healthChecker.setStatus(
-      '',
-      health_pb.HealthCheckResponse.ServingStatus.SERVING
-    );
+    healthChecker.setStatus('', ServingStatus.SERVING);
 
     // updates status for whole server.
     expect(healthChecker._genResponse('')[1]?.getStatus()).toEqual(
