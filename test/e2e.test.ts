@@ -49,15 +49,13 @@ describe('HealthChecker', () => {
           >(client.check)
           .bind(client);
 
-        const message1 = await doCheck(NewHealthCheckRequest(''));
-        expect(message1?.getStatus()).toEqual(
+        expect((await doCheck(NewHealthCheckRequest('')))?.getStatus()).toEqual(
           health_pb.HealthCheckResponse.ServingStatus.SERVING
         );
 
-        const message2 = await doCheck(NewHealthCheckRequest('some/service'));
-        expect(message2?.getStatus()).toEqual(
-          health_pb.HealthCheckResponse.ServingStatus.NOT_SERVING
-        );
+        expect(
+          (await doCheck(NewHealthCheckRequest('some/service')))?.getStatus()
+        ).toEqual(health_pb.HealthCheckResponse.ServingStatus.NOT_SERVING);
       });
     });
 
