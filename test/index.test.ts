@@ -28,4 +28,60 @@ describe('HealthChecker', () => {
     );
     expect(healthChecker._genResponse('unknown/service')[1]).toEqual(null);
   });
+
+  it('updates status by setStatus', () => {
+    const healthChecker = new HealthChecker({
+      '': health_pb.HealthCheckResponse.ServingStatus.UNKNOWN,
+      'some/service': health_pb.HealthCheckResponse.ServingStatus.NOT_SERVING,
+      'another/service':
+        health_pb.HealthCheckResponse.ServingStatus.NOT_SERVING,
+    });
+
+    expect(healthChecker._genResponse('')[1]?.getStatus()).toEqual(
+      health_pb.HealthCheckResponse.ServingStatus.UNKNOWN
+    );
+    expect(healthChecker._genResponse('some/service')[1]?.getStatus()).toEqual(
+      health_pb.HealthCheckResponse.ServingStatus.NOT_SERVING
+    );
+    expect(
+      healthChecker._genResponse('another/service')[1]?.getStatus()
+    ).toEqual(health_pb.HealthCheckResponse.ServingStatus.NOT_SERVING);
+
+    healthChecker.setStatus(
+      'some/service',
+      health_pb.HealthCheckResponse.ServingStatus.SERVING
+    );
+
+    // updates status for specified service
+    expect(healthChecker._genResponse('some/service')[1]?.getStatus()).toEqual(
+      health_pb.HealthCheckResponse.ServingStatus.SERVING
+    );
+
+    // does not affect on other services
+    expect(healthChecker._genResponse('')[1]?.getStatus()).toEqual(
+      health_pb.HealthCheckResponse.ServingStatus.UNKNOWN
+    );
+    expect(
+      healthChecker._genResponse('another/service')[1]?.getStatus()
+    ).toEqual(health_pb.HealthCheckResponse.ServingStatus.NOT_SERVING);
+
+    healthChecker.setStatus(
+      '',
+      health_pb.HealthCheckResponse.ServingStatus.SERVING
+    );
+
+    // updates status for whole server.
+    expect(healthChecker._genResponse('')[1]?.getStatus()).toEqual(
+      health_pb.HealthCheckResponse.ServingStatus.SERVING
+    );
+
+    // does not affect on other services
+    expect(healthChecker._genResponse('some/service')[1]?.getStatus()).toEqual(
+      health_pb.HealthCheckResponse.ServingStatus.SERVING
+    );
+
+    expect(
+      healthChecker._genResponse('another/service')[1]?.getStatus()
+    ).toEqual(health_pb.HealthCheckResponse.ServingStatus.NOT_SERVING);
+  });
 });
