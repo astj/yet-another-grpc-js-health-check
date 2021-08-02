@@ -56,7 +56,7 @@ export class HealthChecker {
     this.statusMap[service] = status;
   }
 
-  private check(
+  check(
     call: grpc.ServerUnaryCall<
       health_pb.HealthCheckRequest,
       health_pb.HealthCheckResponse
@@ -64,13 +64,20 @@ export class HealthChecker {
     callback: grpc.sendUnaryData<health_pb.HealthCheckResponse>
   ): void {
     const service = call.request.getService();
+    const [err, res] = this._genResponse(service);
+    callback(err, res);
+  }
+
+  _genResponse(
+    service: string
+  ): [Partial<grpc.StatusObject> | null, health_pb.HealthCheckResponse | null] {
     const status = this.statusMap[service];
     if (status === undefined) {
-      callback({code: grpc.status.NOT_FOUND}, null);
+      return [{code: grpc.status.NOT_FOUND}, null];
     }
     const res = new health_pb.HealthCheckResponse();
     res.setStatus(status);
-    callback(null, res);
+    return [null, res];
   }
 }
 
