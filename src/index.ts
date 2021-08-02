@@ -40,7 +40,7 @@ export class HealthChecker {
   constructor(statusMap: StatusMap) {
     Object.assign(this.statusMap, statusMap);
     this.server = {
-      check: this.check.bind(this),
+      check: this._check.bind(this),
     };
   }
 
@@ -56,7 +56,7 @@ export class HealthChecker {
     this.statusMap[service] = status;
   }
 
-  check(
+  _check(
     call: grpc.ServerUnaryCall<
       health_pb.HealthCheckRequest,
       health_pb.HealthCheckResponse
